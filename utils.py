@@ -8,7 +8,17 @@ import matplotlib.pyplot as plt
 
 
 def set_seed(seed=0):
-    """ Set the seed for all possible sources of randomness to allow for reproduceability. """
+    """
+    Set all random number generators to a fixed seed for reproducibility.
+
+    This ensures that experiments are repeatable by setting the seed for:
+    - PyTorch (CPU and GPU)
+    - NumPy
+    - Python's built-in random module
+
+    Args:
+        seed (int): The seed value. Default is 0.
+    """
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed(seed)
@@ -21,12 +31,27 @@ def set_seed(seed=0):
 
 
 def prepare_mnist_seed_images():
+    """
+    Extract and process 20 MNIST '8' images, crop and pad them, then save as PNG.
+
+    The images are cropped to the bounding box of the digit and padded to make them square.
+    They are saved in "games/mariokart/seed_road/MNIST_examples/eights" as 'sample_0.png', ..., 'sample_19.png'.
+    """
     test_loader = torch.utils.data.DataLoader(
-        torchvision.datasets.MNIST('output/mnist/', train=False, download=True,
-                                   transform=torchvision.transforms.Compose(
-                                       [torchvision.transforms.ToTensor(),
-                                        torchvision.transforms.Normalize((0.1307,), (0.3081,))])),
-        batch_size=1, shuffle=True)
+        torchvision.datasets.MNIST(
+            "output/mnist/",
+            train=False,
+            download=True,
+            transform=torchvision.transforms.Compose(
+                [
+                    torchvision.transforms.ToTensor(),
+                    torchvision.transforms.Normalize((0.1307,), (0.3081,)),
+                ]
+            ),
+        ),
+        batch_size=1,
+        shuffle=True,
+    )
     eights = torch.zeros((20, 1, 28, 28))
     e = 0
     while e < eights.shape[0]:
@@ -49,14 +74,18 @@ def prepare_mnist_seed_images():
             x_1 = min(x)
             x_2 = max(x) + 2
             diff = l_x - l_y
-            y_1 = min(y) - diff//2
-            y_2 = max(y) + diff//2 + 2
+            y_1 = min(y) - diff // 2
+            y_2 = max(y) + diff // 2 + 2
         else:  # l_y > l_x:
             y_1 = min(y)
             y_2 = max(y) + 2
             diff = l_y - l_x
-            x_1 = min(x) - diff//2
-            x_2 = max(x) + diff//2 + 2
+            x_1 = min(x) - diff // 2
+            x_2 = max(x) + diff // 2 + 2
         tmp = tmp[x_1:x_2, y_1:y_2]
         # tmp = interpolate(tmp.unsqueeze(0).unsqueeze(0), (28, 28))
-        plt.imsave('mariokart/seed_road/MNIST_examples/eights/sample_%d.png' % i, tmp[0][0], cmap='Greys')
+        plt.imsave(
+            "games/mariokart/seed_road/MNIST_examples/eights/sample_%d.png" % i,
+            tmp[0][0],
+            cmap="Greys",
+        )

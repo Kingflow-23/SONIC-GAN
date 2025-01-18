@@ -11,49 +11,86 @@ import matplotlib.pyplot as plt
 # sys.path.append(os.path.join(os.path.abspath(os.path.dirname(__file__)), ".."))  # uncomment if opening form other dir
 
 from config import get_arguments, post_config
-from mario.level_utils import one_hot_to_ascii_level, group_to_token, token_to_group, read_level
-from mario.level_image_gen import LevelImageGen as MarioLevelGen
-from mariokart.special_mariokart_downsampling import special_mariokart_downsampling
-from mariokart.level_image_gen import LevelImageGen as MariokartLevelGen
-from sonic.level_image_gen import LevelImageGen as SonicLevelGen
-from mario.tokens import REPLACE_TOKENS as MARIO_REPLACE_TOKENS
-from mariokart.tokens import REPLACE_TOKENS as MARIOKART_REPLACE_TOKENS
-from mario.tokens import TOKEN_GROUPS as MARIO_TOKEN_GROUPS
-from sonic.tokens import TOKENS_GROUPS as SONIC_TOKEN_GROUPS
-from mariokart.tokens import TOKEN_GROUPS as MARIOKART_TOKEN_GROUPS
-from mario.special_mario_downsampling import special_mario_downsampling
-from sonic.special_sonic_downsampling import special_sonic_downsampling
+from games.mario.level_utils import (
+    one_hot_to_ascii_level,
+    group_to_token,
+    token_to_group,
+    read_level,
+)
+from games.mario.level_image_gen import LevelImageGen as MarioLevelGen
+from games.mariokart.special_mariokart_downsampling import (
+    special_mariokart_downsampling,
+)
+from games.mariokart.level_image_gen import LevelImageGen as MariokartLevelGen
+from games.sonic.level_image_gen import LevelImageGen as SonicLevelGen
+from games.mario.tokens import REPLACE_TOKENS as MARIO_REPLACE_TOKENS
+from games.mariokart.tokens import REPLACE_TOKENS as MARIOKART_REPLACE_TOKENS
+from games.mario.tokens import TOKEN_GROUPS as MARIO_TOKEN_GROUPS
+from games.sonic.tokens import TOKENS_GROUPS as SONIC_TOKEN_GROUPS
+from games.mariokart.tokens import TOKEN_GROUPS as MARIOKART_TOKEN_GROUPS
+from games.mario.special_mario_downsampling import special_mario_downsampling
+from games.sonic.special_sonic_downsampling import special_sonic_downsampling
 from generate_noise import generate_spatial_noise
 from models import load_trained_pyramid
 
 
-def generate_samples(generators, noise_maps, reals, noise_amplitudes, opt, in_s=None, scale_v=1.0, scale_h=1.0,
-                     current_scale=0, gen_start_scale=0, num_samples=50, render_images=True, save_tensors=False,
-                     save_dir="random_samples"):
+def generate_samples(
+    generators,
+    noise_maps,
+    reals,
+    noise_amplitudes,
+    opt,
+    in_s=None,
+    scale_v=1.0,
+    scale_h=1.0,
+    current_scale=0,
+    gen_start_scale=0,
+    num_samples=50,
+    render_images=True,
+    save_tensors=False,
+    save_dir="random_samples",
+):
     """
-    Generate samples given a pretrained TOAD-GAN (generators, noise_maps, reals, noise_amplitudes).
-    Uses namespace "opt" that needs to be parsed.
-    "in_s" can be used as a starting image in any scale set with "current_scale".
-    "gen_start_scale" sets the scale generation is to be started in.
-    "num_samples" is the number of different samples to be generated.
-    "render_images" defines if images are to be rendered (takes space and time if many samples are generated).
-    "save_tensors" defines if tensors are to be saved (can be needed for token insertion *experimental*).
-    "save_dir" is the path the samples are saved in.
+    Generate samples using a pretrained TOAD-GAN model. This function iteratively generates images
+    at different scales based on the provided generators, noise maps, and other parameters.
+
+    Args:
+        generators (list): List of generator models for each scale.
+        noise_maps (list): List of noise maps used for each scale.
+        reals (list): List of real images at each scale used for training.
+        noise_amplitudes (list): List of noise amplitude values for each scale.
+        opt (Namespace): Configuration options containing various settings such as game type,
+            device, token list, and other parameters.
+        in_s (Tensor, optional): Starting image tensor for generation. Defaults to None.
+        scale_v (float, optional): Vertical scaling factor for noise generation. Defaults to 1.0.
+        scale_h (float, optional): Horizontal scaling factor for noise generation. Defaults to 1.0.
+        current_scale (int, optional): The current scale index to start generation from. Defaults to 0.
+        gen_start_scale (int, optional): The scale index to start generating samples from. Defaults to 0.
+        num_samples (int, optional): Number of samples to generate. Defaults to 50.
+        render_images (bool, optional): Whether to render and save generated images. Defaults to True.
+        save_tensors (bool, optional): Whether to save generated tensors. Defaults to False.
+        save_dir (str, optional): Directory path to save generated samples. Defaults to "random_samples".
+
+    Returns:
+        Tensor: The last generated image tensor.
+
+    Raises:
+        NameError: If the game name in `opt` is not recognized.
     """
 
     # Holds images generated in current scale
     images_cur = []
 
     # Check which game we are using for token groups
-    if opt.game == 'mario':
+    if opt.game == "mario":
         token_groups = MARIO_TOKEN_GROUPS
-    elif opt.game == 'mariokart':
+    elif opt.game == "mariokart":
         token_groups = MARIOKART_TOKEN_GROUPS
     elif opt.game == "sonic":
         token_groups = SONIC_TOKEN_GROUPS
     else:
         token_groups = []
-        NameError("name of --game not recognized. Supported: mario, mariokart")
+        NameError("name of --game not recognized. Supported: mario, mariokart, sonic")
 
     # Main sampling loop
     for G, Z_opt, noise_amp in zip(generators, noise_maps, noise_amplitudes):
@@ -64,16 +101,22 @@ def generate_samples(generators, noise_maps, reals, noise_amplitudes, opt, in_s=
         logger.info("Generating samples at scale {}", current_scale)
 
         # Padding (should be chosen according to what was trained with)
-        n_pad = int(1*opt.num_layer)
+        n_pad = int(1 * opt.num_layer)
         if not opt.pad_with_noise:
             m = nn.ZeroPad2d(int(n_pad))  # pad with zeros
         else:
             m = nn.ReflectionPad2d(int(n_pad))  # pad with reflected noise
 
         # Calculate shapes to generate
-        if 0 < gen_start_scale <= current_scale:  # Special case! Can have a wildly different shape through in_s
-            scale_v = in_s.shape[-2] / (noise_maps[gen_start_scale-1].shape[-2] - n_pad * 2)
-            scale_h = in_s.shape[-1] / (noise_maps[gen_start_scale-1].shape[-1] - n_pad * 2)
+        if (
+            0 < gen_start_scale <= current_scale
+        ):  # Special case! Can have a wildly different shape through in_s
+            scale_v = in_s.shape[-2] / (
+                noise_maps[gen_start_scale - 1].shape[-2] - n_pad * 2
+            )
+            scale_h = in_s.shape[-1] / (
+                noise_maps[gen_start_scale - 1].shape[-1] - n_pad * 2
+            )
             nzx = (Z_opt.shape[-2] - n_pad * 2) * scale_v
             nzy = (Z_opt.shape[-1] - n_pad * 2) * scale_h
         else:
@@ -98,7 +141,9 @@ def generate_samples(generators, noise_maps, reals, noise_amplitudes, opt, in_s=
 
         # If in_s is none or filled with zeros reshape to correct size with channels
         if in_s is None:
-            in_s = torch.zeros(reals[0].shape[0], channels, *reals[0].shape[2:]).to(opt.device)
+            in_s = torch.zeros(reals[0].shape[0], channels, *reals[0].shape[2:]).to(
+                opt.device
+            )
         elif in_s.sum() == 0:
             in_s = torch.zeros(1, channels, *in_s.shape[-2:]).to(opt.device)
 
@@ -106,11 +151,15 @@ def generate_samples(generators, noise_maps, reals, noise_amplitudes, opt, in_s=
         for n in tqdm(range(0, num_samples, 1)):
 
             # Get noise image
-            z_curr = generate_spatial_noise([1, channels, int(round(nzx)), int(round(nzy))], device=opt.device)
+            z_curr = generate_spatial_noise(
+                [1, channels, int(round(nzx)), int(round(nzy))], device=opt.device
+            )
             z_curr = m(z_curr)
 
             # Set up previous image I_prev
-            if (not images_prev) or current_scale == 0:  # if there is no "previous" image
+            if (
+                not images_prev
+            ) or current_scale == 0:  # if there is no "previous" image
                 I_prev = in_s
             else:
                 I_prev = images_prev[n]
@@ -119,7 +168,12 @@ def generate_samples(generators, noise_maps, reals, noise_amplitudes, opt, in_s=
                 if current_scale == (opt.token_insert + 1):
                     I_prev = group_to_token(I_prev, opt.token_list, token_groups)
 
-            I_prev = interpolate(I_prev, [int(round(nzx)), int(round(nzy))], mode='bilinear', align_corners=False)
+            I_prev = interpolate(
+                I_prev,
+                [int(round(nzx)), int(round(nzy))],
+                mode="bilinear",
+                align_corners=False,
+            )
             I_prev = m(I_prev)
 
             # We take the optimized noise map Z_opt as an input if we start generating on later scales
@@ -139,19 +193,28 @@ def generate_samples(generators, noise_maps, reals, noise_amplitudes, opt, in_s=
             I_curr = G(z_in.detach(), I_prev, temperature=1)
 
             # Allow road insertion in mario kart levels
-            if opt.game == 'mariokart':
+            if opt.game == "mariokart":
                 if current_scale == 0 and opt.seed_road is not None:
                     for token in token_list:
-                        if token == 'R':  # Road map!
+                        if token == "R":  # Road map!
                             tmp = opt.seed_road.clone().to(opt.device)
                             I_curr[0, token_list.index(token)] = tmp
 
-                        elif token in ['O', 'Q', 'C', '<']:  # Tokens that can only appear on roads
-                            I_curr[0, token_list.index(token)] *= opt.seed_road.to(opt.device)
+                        elif token in [
+                            "O",
+                            "Q",
+                            "C",
+                            "<",
+                        ]:  # Tokens that can only appear on roads
+                            I_curr[0, token_list.index(token)] *= opt.seed_road.to(
+                                opt.device
+                            )
 
                         else:  # Other tokens like walls
-                            I_curr[0, token_list.index(token)] = torch.min(I_curr[0, token_list.index(token)],
-                                                                           1 - opt.seed_road.to(opt.device))
+                            I_curr[0, token_list.index(token)] = torch.min(
+                                I_curr[0, token_list.index(token)],
+                                1 - opt.seed_road.to(opt.device),
+                            )
 
             # Save all scales
             # if True:
@@ -159,7 +222,7 @@ def generate_samples(generators, noise_maps, reals, noise_amplitudes, opt, in_s=
             # if current_scale == 0 or current_scale == len(reals) - 1:
             # Save only last scale
             if current_scale == len(reals) - 1:
-                dir2save = opt.out_ + '/' + save_dir
+                dir2save = opt.out_ + "/" + save_dir
 
                 # Make directories
                 try:
@@ -181,12 +244,16 @@ def generate_samples(generators, noise_maps, reals, noise_amplitudes, opt, in_s=
                     img.save("%s/img/%d_sc%d.png" % (dir2save, n, current_scale))
 
                 # Save level txt
-                with open("%s/txt/%d_sc%d.txt" % (dir2save, n, current_scale), "w") as f:
+                with open(
+                    "%s/txt/%d_sc%d.txt" % (dir2save, n, current_scale), "w"
+                ) as f:
                     f.writelines(level)
 
                 # Save torch tensor
                 if save_tensors:
-                    torch.save(I_curr, "%s/torch/%d_sc%d.pt" % (dir2save, n, current_scale))
+                    torch.save(
+                        I_curr, "%s/torch/%d_sc%d.pt" % (dir2save, n, current_scale)
+                    )
 
                 # Token insertion render (experimental!)
                 if opt.token_insert >= 0 and current_scale >= 1:
@@ -208,19 +275,32 @@ def generate_samples(generators, noise_maps, reals, noise_amplitudes, opt, in_s=
 
 
 def generate_mario_samples(opt_m):
+    """
+    This function generates a large number of samples for each Mario level in the provided input directory,
+    using a pre-trained generator for different levels. The function processes each level, reads the level
+    definition, loads the respective generator model, and generates samples which are saved to an output
+    directory for further experiments.
 
+    Parameters:
+    -----------
+    opt_m : Namespace
+        A configuration object containing the required settings such as input directory, output directory,
+        scale factors, and game-specific configurations.
+    """
     # Generate many samples for all mario levels for large scale evaluation
-    level_names = [f for f in os.listdir("./input") if f.endswith('.txt')]
+    level_names = [f for f in os.listdir("./input/mario") if f.endswith(".txt")]
     level_names.sort()
 
     # Directory with saved runs
-    run_dir_m = "/home/awiszus/Project/TOAD-GAN/wandb/"
+    run_dir_m = "./output/wandb/"
 
+    # Iterate through each Mario level for sample generation
     for generator_level in range(0, len(level_names)):
-        # New "input" mario level
+
+        # Set the input name for the current level
         opt_m.input_name = level_names[generator_level]
 
-        # New "output" folder
+        # Set the output folder based on the level index
         if generator_level == 0:
             opt_m.out_ = run_dir_m + "run-20200605_101920-21l6f6ke"  # level 1 (1-1)
         elif generator_level == 1:
@@ -256,7 +336,9 @@ def generate_mario_samples(opt_m):
         real_m = read_level(opt_m, None, MARIO_REPLACE_TOKENS).to(opt_m.device)
 
         # Load TOAD-GAN for current level
-        generators_m, noise_maps_m, reals_m, noise_amplitudes_m = load_trained_pyramid(opt_m)
+        generators_m, noise_maps_m, reals_m, noise_amplitudes_m = load_trained_pyramid(
+            opt_m
+        )
 
         # Set in_s and scales
         if opt_m.gen_start_scale == 0:  # starting in lowest scale
@@ -269,55 +351,93 @@ def generate_mario_samples(opt_m):
             m_scale_v = 1.0
             m_scale_h = 1.0
 
-        # Prefix for folder structure
-        prefix_m = 'arbitrary'
+        # Define directory prefix for output
+        prefix_m = "arbitrary"
 
-        # Define directory
+        # Define directory name for saving samples
         s_dir_name_m = "%s_random_samples_v%.5f_h%.5f_start%d" % (
-            prefix_m, m_scale_v, m_scale_h, opt_m.gen_start_scale)
+            prefix_m,
+            m_scale_v,
+            m_scale_h,
+            opt_m.gen_start_scale,
+        )
 
-        # Generate samples
-        generate_samples(generators_m, noise_maps_m, reals_m, noise_amplitudes_m, opt_m, in_s=in_s_m,
-                         scale_v=m_scale_v, scale_h=m_scale_h, current_scale=opt_m.gen_start_scale,
-                         gen_start_scale=opt_m.gen_start_scale, num_samples=1000, render_images=False,
-                         save_tensors=False, save_dir=s_dir_name_m)
+        # Generate samples for the current level
+        generate_samples(
+            generators_m,
+            noise_maps_m,
+            reals_m,
+            noise_amplitudes_m,
+            opt_m,
+            in_s=in_s_m,
+            scale_v=m_scale_v,
+            scale_h=m_scale_h,
+            current_scale=opt_m.gen_start_scale,
+            gen_start_scale=opt_m.gen_start_scale,
+            num_samples=1000,
+            render_images=False,
+            save_tensors=False,
+            save_dir=s_dir_name_m,
+        )
 
-        # For embedding experiment, copy levels to easy access folder
-        samples_dir = opt_m.out_ + '/' + s_dir_name_m + '/txt'
+        # Copy levels to an easy access folder for embedding experiments
+        samples_dir = opt_m.out_ + "/" + s_dir_name_m + "/txt"
         newpath = "./input/umap_images/baselines/" + opt_m.input_name[:-4]
         os.makedirs(newpath, exist_ok=True)
         for f in tqdm(os.listdir(samples_dir)):
-            if f.endswith('.txt'):
+            if f.endswith(".txt"):
                 copyfile(os.path.join(samples_dir, f), os.path.join(newpath, f))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # NOTICE: The "output" dir is where the generator is located as with main.py, even though it is the "input" here
 
     # Parse arguments
     parse = get_arguments()
     parse.add_argument("--out_", help="folder containing generator files")
-    parse.add_argument("--scale_v", type=float, help="vertical scale factor", default=1.0)
-    parse.add_argument("--scale_h", type=float, help="horizontal scale factor", default=1.0)
-    parse.add_argument("--gen_start_scale", type=int, help="scale to start generating in", default=0)
-    parse.add_argument("--num_samples", type=int, help="number of samples to be generated", default=10)
-    parse.add_argument("--make_mario_samples", action="store_true", help="make 1000 samples for each mario generator"
-                                                                         "specified in the code.", default=False)
-    parse.add_argument("--seed_mariokart_road", action="store_true", help="seed mariokart generators with a road image",
-                       default=False)
-    parse.add_argument("--token_insert_experiment", action="store_true", help="make token insert experiment "
-                                                                              "(experimental!)", default=False)
+    parse.add_argument(
+        "--scale_v", type=float, help="vertical scale factor", default=1.0
+    )
+    parse.add_argument(
+        "--scale_h", type=float, help="horizontal scale factor", default=1.0
+    )
+    parse.add_argument(
+        "--gen_start_scale", type=int, help="scale to start generating in", default=0
+    )
+    parse.add_argument(
+        "--num_samples", type=int, help="number of samples to be generated", default=10
+    )
+    parse.add_argument(
+        "--make_mario_samples",
+        action="store_true",
+        help="make 1000 samples for each mario generator" "specified in the code.",
+        default=False,
+    )
+    parse.add_argument(
+        "--seed_mariokart_road",
+        action="store_true",
+        help="seed mariokart generators with a road image",
+        default=False,
+    )
+    parse.add_argument(
+        "--token_insert_experiment",
+        action="store_true",
+        help="make token insert experiment " "(experimental!)",
+        default=False,
+    )
     opt = parse.parse_args()
 
     if (not opt.out_) and (not opt.make_mario_samples):
-        parse.error('--out_ is required (--make_mario_samples experiment is the exception)')
+        parse.error(
+            "--out_ is required (--make_mario_samples experiment is the exception)"
+        )
 
     opt = post_config(opt)
 
     if opt.make_mario_samples:
         # Code to make a large body of mario samples for other experiments
-        opt.game = 'mario'
-        sprite_path = opt.game + '/sprites'
+        opt.game = "mario"
+        sprite_path = ".games/" + opt.game + "/sprites"
         opt.ImgGen = MarioLevelGen(sprite_path)
         opt.gen_start_scale = 0  # Forced for this experiment
 
@@ -325,8 +445,8 @@ if __name__ == '__main__':
 
     elif opt.seed_mariokart_road:
         # Code to make mario kart seeded road examples
-        opt.game = 'mariokart'
-        sprite_path = opt.game + '/sprites'
+        opt.game = "mariokart"
+        sprite_path = "games/" + opt.game + "/sprites"
         opt.ImgGen = MariokartLevelGen(sprite_path)
         replace_tokens = MARIOKART_REPLACE_TOKENS
         downsample = special_mariokart_downsampling
@@ -338,8 +458,8 @@ if __name__ == '__main__':
         generators, noise_maps, reals, noise_amplitudes = load_trained_pyramid(opt)
 
         # Define paths to seed road image(s)
-        seed_road_images = ['mariokart/seed_road/seed_road.png']
-        # seed_road_images = ['mariokart/seed_road/MNIST_examples/eights/sample_%d.png' % im for im in range(20)]
+        seed_road_images = [".games/mariokart/seed_road/seed_road.png"]
+        # seed_road_images = ['.games/mariokart/seed_road/MNIST_examples/eights/sample_%d.png' % im for im in range(20)]
 
         for i, img_path in enumerate(seed_road_images):
             # Read and convert seed road image
@@ -358,29 +478,47 @@ if __name__ == '__main__':
             real_down = real_down[0]
 
             # in_s = torch.zeros((round(reals[-1].shape[-2]*scale_v), round(reals[-1].shape[-1]*scale_h)),
-            in_s = torch.zeros(real_down.shape,
-                               device=opt.device)  # necessary for correct input shape
+            in_s = torch.zeros(
+                real_down.shape, device=opt.device
+            )  # necessary for correct input shape
 
             # Directory name
-            s_dir_name = "random_road_samples_v%.5f_h%.5f_st%d_%d" % (opt.scale_v, opt.scale_h, opt.gen_start_scale, i)
+            s_dir_name = "random_road_samples_v%.5f_h%.5f_st%d_%d" % (
+                opt.scale_v,
+                opt.scale_h,
+                opt.gen_start_scale,
+                i,
+            )
 
             # Generate samples
-            generate_samples(generators, noise_maps, reals, noise_amplitudes, opt, in_s=in_s,
-                             scale_v=scale_v, scale_h=scale_h, save_dir=s_dir_name, num_samples=opt.num_samples)
+            generate_samples(
+                generators,
+                noise_maps,
+                reals,
+                noise_amplitudes,
+                opt,
+                in_s=in_s,
+                scale_v=scale_v,
+                scale_h=scale_h,
+                save_dir=s_dir_name,
+                num_samples=opt.num_samples,
+            )
 
     else:
         # Code to make samples for given generator
-        token_insertion = True if opt.token_insert and opt.token_insert_experiment else False
+        token_insertion = (
+            True if opt.token_insert and opt.token_insert_experiment else False
+        )
 
         # Init game specific inputs
         replace_tokens = {}
-        sprite_path = opt.game + '/sprites'
-        if opt.game == 'mario':
+        sprite_path = "games/" + opt.game + "/sprites"
+        if opt.game == "mario":
             opt.ImgGen = MarioLevelGen(sprite_path)
             replace_tokens = MARIO_REPLACE_TOKENS
             downsample = special_mario_downsampling
 
-        elif opt.game == 'mariokart':
+        elif opt.game == "mariokart":
             opt.ImgGen = MariokartLevelGen(sprite_path)
             replace_tokens = MARIOKART_REPLACE_TOKENS
             downsample = special_mariokart_downsampling
@@ -391,7 +529,9 @@ if __name__ == '__main__':
             downsample = special_sonic_downsampling
 
         else:
-            NameError("name of --game not recognized. Supported: mario, mariokart")
+            NameError(
+                "name of --game not recognized. Supported: mario, mariokart, sonic"
+            )
 
         # Load level
         real = read_level(opt, None, replace_tokens).to(opt.device)
@@ -410,28 +550,37 @@ if __name__ == '__main__':
             real_fakes = read_level(opt_fakes).to(opt.device)
 
             # Downsample "other level"
-            real_fakes_down = special_mario_downsampling(1, [[opt.scales[-1], opt.scales[-1]]],
-                                                         real_fakes, opt_fakes.token_list)
+            real_fakes_down = special_mario_downsampling(
+                1, [[opt.scales[-1], opt.scales[-1]]], real_fakes, opt_fakes.token_list
+            )
 
-            run_dir = "/home/awiszus/Project/TOAD-GAN/wandb/"
+            run_dir = "/output/wandb/"
             if seed_level == 0:  # Only done for mario levels 1 to 3 so far
-                real_fakes = torch.load(run_dir + 'run-20200311_113148-6fmy47ks/'
-                                                  'arbitrary_random_samples_v1_h0.297029702970297_start0/torch/'
-                                                  '1_sc0.pt',
-                                        device=opt.device)
+                real_fakes = torch.load(
+                    run_dir + "run-20200311_113148-6fmy47ks/"
+                    "arbitrary_random_samples_v1_h0.297029702970297_start0/torch/"
+                    "1_sc0.pt",
+                    device=opt.device,
+                )
             elif seed_level == 1:
-                real_fakes = torch.load(run_dir + 'run-20200311_113200-55smfqkb/'
-                                                  'arbitrary_random_samples_v1_h0.379746835443038_start0/torch/'
-                                                  '7_sc0.pt',
-                                        device=opt.device)
+                real_fakes = torch.load(
+                    run_dir + "run-20200311_113200-55smfqkb/"
+                    "arbitrary_random_samples_v1_h0.379746835443038_start0/torch/"
+                    "7_sc0.pt",
+                    device=opt.device,
+                )
             elif seed_level == 2:
-                real_fakes = torch.load(run_dir + 'run-20200311_121708-jnus8kfl/'
-                                                  'arbitrary_random_samples_v1_h0.4_start0/torch/'
-                                                  '5_sc0.pt',
-                                        device=opt.device)
+                real_fakes = torch.load(
+                    run_dir + "run-20200311_121708-jnus8kfl/"
+                    "arbitrary_random_samples_v1_h0.4_start0/torch/"
+                    "5_sc0.pt",
+                    device=opt.device,
+                )
             elif seed_level == -1:  # seed with noise
                 fakes_shape = real_fakes_down[0].shape
-                real_fakes = nn.Softmax2d()(torch.rand(fakes_shape, device=opt.device) * 50) * 1
+                real_fakes = (
+                    nn.Softmax2d()(torch.rand(fakes_shape, device=opt.device) * 50) * 1
+                )
 
             in_s = real_fakes
             prefix = "seeded"
@@ -440,15 +589,30 @@ if __name__ == '__main__':
 
         else:
             # Get input shape for in_s
-            real_down = downsample(1, [[opt.scale_v, opt.scale_h]], real, opt.token_list)
+            real_down = downsample(
+                1, [[opt.scale_v, opt.scale_h]], real, opt.token_list
+            )
             real_down = real_down[0]
             in_s = torch.zeros_like(real_down, device=opt.device)
             prefix = "arbitrary"
 
         # Directory name
-        s_dir_name = "%s_random_samples_v%.5f_h%.5f_st%d" % (prefix, opt.scale_v, opt.scale_h, opt.gen_start_scale)
+        s_dir_name = "%s_random_samples_v%.5f_h%.5f_st%d" % (
+            prefix,
+            opt.scale_v,
+            opt.scale_h,
+            opt.gen_start_scale,
+        )
 
-        generate_samples(generators, noise_maps, reals, noise_amplitudes, opt, in_s=in_s,
-                         scale_v=opt.scale_v, scale_h=opt.scale_h, save_dir=s_dir_name, num_samples=opt.num_samples)
-
-
+        generate_samples(
+            generators,
+            noise_maps,
+            reals,
+            noise_amplitudes,
+            opt,
+            in_s=in_s,
+            scale_v=opt.scale_v,
+            scale_h=opt.scale_h,
+            save_dir=s_dir_name,
+            num_samples=opt.num_samples,
+        )

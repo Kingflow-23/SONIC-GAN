@@ -15,29 +15,55 @@ from tqdm import tqdm
 from umap import UMAP as UsedMapper
 
 import wandb
-from mario.level_classification import LevelClassification
-from mario.level_image_gen import LevelImageGen
-from mario.level_snippet_dataset import LevelSnippetDataset
-from mario.level_utils import one_hot_to_ascii_level
+from games.mario.level_classification import LevelClassification
+from games.mario.level_image_gen import LevelImageGen
+from games.mario.level_snippet_dataset import LevelSnippetDataset
+from games.mario.level_utils import one_hot_to_ascii_level
 from utils import set_seed
 
 
 class EmbeddingsCallback(pl.Callback):
+    """
+    PyTorch Lightning callback that visualizes embeddings at the end of each epoch.
+
+    This callback computes and visualizes the embeddings for the model's training dataset
+    using UMAP. It updates the model's embedding mapper after each epoch.
+    """
+
     def on_epoch_end(self, trainer: pl.Trainer, pl_module: LevelClassification):
+        """
+        Called at the end of each epoch to visualize embeddings and update the mapper.
+
+        Args:
+            trainer (pl.Trainer): The PyTorch Lightning trainer instance.
+            pl_module (LevelClassification): The model (LevelClassification) being trained.
+        """
         pl_module.mapper = visualize_embeddings(
-            pl_module.dataset, pl_module, "train", pl_module.hparams)
+            pl_module.dataset, pl_module, "train", pl_module.hparams
+        )
 
 
 def parse_args():
+    """
+    Parse command-line arguments.
+
+    Returns:
+        Namespace: A namespace object containing parsed arguments.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--project", type=str, default="mario")
     parser.add_argument("--tags", nargs="*", type=str, default=["similarity"])
-    parser.add_argument("--baseline-level-dir", type=str,
-                        metavar="DIR", default="input/umap_images/baselines")
+    parser.add_argument(
+        "--baseline-level-dir",
+        type=str,
+        metavar="DIR",
+        default="input/umap_images/baselines",
+    )
     parser.add_argument("--max-count", type=int, default=700)
     parser.add_argument("--restore", type=str, metavar="DIR")
-    parser.add_argument("--device", type=str,
-                        default="cuda" if torch.cuda.is_available else "cpu")
+    parser.add_argument(
+        "--device", type=str, default="cuda" if torch.cuda.is_available else "cpu"
+    )
     parser.add_argument("--debug", "-d", action="store_true", default=False)
     parser = LevelClassification.add_args(parser)
     hparams = parser.parse_args()
@@ -45,10 +71,18 @@ def parse_args():
 
 
 def main():
+    """
+    Main function to initialize model training, restore a checkpoint if necessary,
+    and visualize embeddings using UMAP.
+    """
     logger.remove()
-    logger.add(sys.stdout, colorize=True, format="<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> " +
-                                                 "| <level>{level}</level> " +
-                                                 "| <light-black>{file.path}:{line}</light-black> | {message}")
+    logger.add(
+        sys.stdout,
+        colorize=True,
+        format="<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> "
+        + "| <level>{level}</level> "
+        + "| <light-black>{file.path}:{line}</light-black> | {message}",
+    )
     hparams = parse_args()
     if hparams.restore:
         wandb.init(project=hparams.project, tags=hparams.tags)
@@ -58,31 +92,55 @@ def main():
         # wandb.init is called in LevelClassification
         model = LevelClassification(hparams)
         experiment_logger = loggers.WandbLogger(
-            project=hparams.project, tags=hparams.tags)
+            project=hparams.project, tags=hparams.tags
+        )
         hparams.checkpoint_dir = os.path.join(
-            experiment_logger.experiment.dir, "checkpoints")
-        checkpoint_cb = callbacks.ModelCheckpoint(
-            hparams.checkpoint_dir, save_top_k=1)
-        trainer = pl.Trainer(logger=experiment_logger, gpus=1 if hparams.device == "cuda" else 0,
-                             checkpoint_callback=checkpoint_cb, callbacks=[
-                                 EmbeddingsCallback()],
-                             early_stop_callback=callbacks.EarlyStopping(), fast_dev_run=hparams.debug
-                             )
+            experiment_logger.experiment.dir, "checkpoints"
+        )
+        checkpoint_cb = callbacks.ModelCheckpoint(hparams.checkpoint_dir, save_top_k=1)
+        trainer = pl.Trainer(
+            logger=experiment_logger,
+            gpus=1 if hparams.device == "cuda" else 0,
+            checkpoint_callback=checkpoint_cb,
+            callbacks=[EmbeddingsCallback()],
+            early_stop_callback=callbacks.EarlyStopping(),
+            fast_dev_run=hparams.debug,
+        )
         trainer.fit(model)
     model.freeze()
     baseline_datasets = []
     logger.info("Baselines {}", os.listdir(hparams.baseline_level_dir))
-    for i, baseline_level_dir in enumerate(sorted(os.listdir(hparams.baseline_level_dir))):
-        baseline_dataset = LevelSnippetDataset(level_dir=os.path.join(os.getcwd(), hparams.baseline_level_dir,
-                                                                      baseline_level_dir),
-                                               slice_width=model.dataset.slice_width,
-                                               token_list=model.dataset.token_list)
+    for i, baseline_level_dir in enumerate(
+        sorted(os.listdir(hparams.baseline_level_dir))
+    ):
+        baseline_dataset = LevelSnippetDataset(
+            level_dir=os.path.join(
+                os.getcwd(), hparams.baseline_level_dir, baseline_level_dir
+            ),
+            slice_width=model.dataset.slice_width,
+            token_list=model.dataset.token_list,
+        )
         baseline_datasets.append(baseline_dataset)
-    visualize_embeddings(model.dataset, model, "test",
-                         hparams, None, baseline_datasets)
+    visualize_embeddings(model.dataset, model, "test", hparams, None, baseline_datasets)
 
 
-def visualize_embeddings(dataset, model, name, hparams, mapper=None, baseline_datasets=[]):
+def visualize_embeddings(
+    dataset, model, name, hparams, mapper=None, baseline_datasets=[]
+):
+    """
+    Visualizes embeddings by computing and plotting them using UMAP.
+
+    Args:
+        dataset (Dataset): Dataset to generate embeddings from.
+        model (nn.Module): The model to generate embeddings.
+        name (str): Name of the dataset or experiment.
+        hparams (Namespace): Hyperparameters for the model.
+        mapper (UMAP, optional): Pre-fitted UMAP instance. Defaults to None.
+        baseline_datasets (list, optional): List of baseline datasets for comparison. Defaults to [].
+
+    Returns:
+        UMAP: The fitted UMAP instance.
+    """
     dataloader = DataLoader(dataset, batch_size=1)
     embeddings, labels, images = compute_embeddings(model, dataloader, hparams)
 
@@ -95,10 +153,10 @@ def visualize_embeddings(dataset, model, name, hparams, mapper=None, baseline_da
     baselines_mapped_with_targets = []
     baselines_mapped_without_targets = []
     for baseline_dataset in baseline_datasets:
-        baseline_dataloader = DataLoader(
-            baseline_dataset, batch_size=1, shuffle=True)
+        baseline_dataloader = DataLoader(baseline_dataset, batch_size=1, shuffle=True)
         baseline_embeddings, _, b_images = compute_embeddings(
-            model, baseline_dataloader, hparams, hparams.max_count)
+            model, baseline_dataloader, hparams, hparams.max_count
+        )
         baseline_mapped = mapper.transform(baseline_embeddings)
         baselines_images.append(b_images)
         if baseline_dataset.level_idx is not None:
@@ -109,11 +167,12 @@ def visualize_embeddings(dataset, model, name, hparams, mapper=None, baseline_da
             baselines_mapped_without_targets.append(baseline_mapped)
 
     if not baselines_mapped_without_targets:
-        target_list = [[True, baselines_with_targets,
-                        baselines_mapped_with_targets]]
+        target_list = [[True, baselines_with_targets, baselines_mapped_with_targets]]
     else:
-        target_list = [[True, baselines_with_targets, baselines_mapped_with_targets],
-                       [False, baselines_without_targets, baselines_mapped_without_targets]]
+        target_list = [
+            [True, baselines_with_targets, baselines_mapped_with_targets],
+            [False, baselines_without_targets, baselines_mapped_without_targets],
+        ]
 
     for with_targets, baselines, baselines_mapped in target_list:
         if with_targets:
@@ -125,25 +184,50 @@ def visualize_embeddings(dataset, model, name, hparams, mapper=None, baseline_da
             n_samples = baselines[0].shape[0]
             curr_embed = np.concatenate(baselines)
             curr_mapped = np.concatenate(baselines_mapped)
-            curr_labels = np.zeros((n_samples*len(baselines),))
+            curr_labels = np.zeros((n_samples * len(baselines),))
             for i in range(len(baselines)):
-                curr_labels[i*n_samples:(i+1)*n_samples] = i
+                curr_labels[i * n_samples : (i + 1) * n_samples] = i
             curr_images = np.concatenate(baselines_images)
-        means = plot_means(curr_embed, curr_mapped, curr_labels,
-                           curr_images, name, with_targets, dataset.token_list)
-        plot_dataset(dataset, mapped, baselines_mapped, labels, means, name, with_targets)
+        means = plot_means(
+            curr_embed,
+            curr_mapped,
+            curr_labels,
+            curr_images,
+            name,
+            with_targets,
+            dataset.token_list,
+        )
+        plot_dataset(
+            dataset, mapped, baselines_mapped, labels, means, name, with_targets
+        )
     return mapper
 
 
-def plot_means(curr_embed, curr_mapped, curr_labels, curr_images, name, with_targets, token_list):
-    ImgGen = LevelImageGen("./mario/sprites")
+def plot_means(
+    curr_embed, curr_mapped, curr_labels, curr_images, name, with_targets, token_list
+):
+    """
+    Plots the mean of each class in the embedding space.
+
+    Args:
+        curr_embed (ndarray): Embedding vectors of the dataset.
+        curr_mapped (ndarray): 2D mapped embeddings for visualization.
+        curr_labels (ndarray): Labels of the dataset.
+        curr_images (ndarray): Corresponding images for each embedding.
+        name (str): Name of the experiment.
+        with_targets (bool): Whether the embeddings include target labels.
+        token_list (list): List of tokens representing the dataset.
+
+    Returns:
+        ndarray: The means of each class in the 2D embedded space.
+    """
+    ImgGen = LevelImageGen("games/mario/sprites")
     means = []
     m_pts = []
     m_imgs = []
     for i, label in enumerate(np.unique(curr_labels)):
         m = curr_embed[curr_labels == label, :].mean(0)
-        closest_idx = (np.sum(abs(curr_embed - m) **
-                              2, axis=1) ** (1. / 2)).argmin()
+        closest_idx = (np.sum(abs(curr_embed - m) ** 2, axis=1) ** (1.0 / 2)).argmin()
         means.append(curr_mapped[closest_idx, :])
         m_imgs.append(curr_images[closest_idx, :])
         m_pts.append(curr_embed[closest_idx, :])
@@ -152,11 +236,15 @@ def plot_means(curr_embed, curr_mapped, curr_labels, curr_images, name, with_tar
     plt.figure(figsize=(len(np.unique(curr_labels) * 2), 2))
     for i, img in enumerate(m_imgs):
         plt.subplot(1, len(np.unique(curr_labels)), i + 1)
-        plt.imshow(ImgGen.render(one_hot_to_ascii_level(
-            torch.tensor(img).unsqueeze(0), token_list)))
+        plt.imshow(
+            ImgGen.render(
+                one_hot_to_ascii_level(torch.tensor(img).unsqueeze(0), token_list)
+            )
+        )
         plt.axis("off")
     figure_path = os.path.join(
-        wandb.run.dir, f"{name}_imgs{'_targets' if with_targets else ''}.pdf")
+        wandb.run.dir, f"{name}_imgs{'_targets' if with_targets else ''}.pdf"
+    )
     plt.tight_layout()
     plt.savefig(figure_path, dpi=300)
     wandb.save(figure_path)
@@ -164,30 +252,73 @@ def plot_means(curr_embed, curr_mapped, curr_labels, curr_images, name, with_tar
     plt.close()
     return means
 
+
 def save_embeddings(embeddings, name):
+    """
+    Saves the embeddings to disk.
+
+    Args:
+        embeddings (ndarray): The embeddings to save.
+        name (str): The name of the embeddings file.
+    """
     embeddings_path = os.path.join(wandb.run.dir, f"{name}_embeddings.pt")
     torch.save(embeddings, embeddings_path)
     wandb.save(embeddings_path)
 
+
 def plot_dataset(dataset, mapped, baselines_mapped, labels, means, name, with_targets):
-    plot_embeddings(mapped, labels=np.array(
-        [dataset.level_names[i].split(".")[0] for i in labels]),
-        baselines=baselines_mapped)
-    ax = sns.scatterplot(x=means[:, 0], y=means[:, 1], style=[s for s in range(means.shape[0])], legend=False,
-                    markers=["o" for _ in range(means.shape[0])], hue=[s for s in range(means.shape[0])],
-                    palette=sns.color_palette("hls", means.shape[0]), edgecolor='black', linewidth=0.8)
+    """
+    Plots the dataset embeddings along with baseline embeddings.
+
+    Args:
+        dataset (Dataset): Dataset to plot embeddings from.
+        mapped (ndarray): 2D mapped embeddings of the dataset.
+        baselines_mapped (list): List of mapped embeddings from baseline datasets.
+        labels (ndarray): Labels of the dataset.
+        means (ndarray): Mean values of each class in the embedding space.
+        name (str): Name of the dataset or experiment.
+        with_targets (bool): Whether the embeddings include target labels.
+    """
+    plot_embeddings(
+        mapped,
+        labels=np.array([dataset.level_names[i].split(".")[0] for i in labels]),
+        baselines=baselines_mapped,
+    )
+    ax = sns.scatterplot(
+        x=means[:, 0],
+        y=means[:, 1],
+        style=[s for s in range(means.shape[0])],
+        legend=False,
+        markers=["o" for _ in range(means.shape[0])],
+        hue=[s for s in range(means.shape[0])],
+        palette=sns.color_palette("hls", means.shape[0]),
+        edgecolor="black",
+        linewidth=0.8,
+    )
     figure_path = os.path.join(
-        wandb.run.dir, f"{name}_embeddings{'_targets' if with_targets else ''}.pdf")
+        wandb.run.dir, f"{name}_embeddings{'_targets' if with_targets else ''}.pdf"
+    )
 
     plt.tight_layout()
     plt.savefig(figure_path, dpi=300)
     wandb.save(figure_path)
     wandb.log(
-        {f"{name}_embeddings{'_targets' if with_targets else ''}": wandb.Image(ax)})
+        {f"{name}_embeddings{'_targets' if with_targets else ''}": wandb.Image(ax)}
+    )
     plt.close()
 
 
 def plot_embeddings(mapper, labels, baselines=[], xlim=None, ylim=None):
+    """
+    Plots the UMAP embeddings with optional baseline comparison.
+
+    Args:
+        mapper (ndarray): 2D mapped embeddings of the dataset.
+        labels (ndarray): Labels for the embeddings.
+        baselines (list, optional): List of baseline embeddings for comparison. Defaults to [].
+        xlim (tuple, optional): Limits for the x-axis. Defaults to None.
+        ylim (tuple, optional): Limits for the y-axis. Defaults to None.
+    """
     sns.set(context="paper", style="white")
     colors = sns.color_palette("hls", len(np.unique(labels)))
     training_palette = sns.color_palette("hls", len(np.unique(labels)))
@@ -209,11 +340,22 @@ def plot_embeddings(mapper, labels, baselines=[], xlim=None, ylim=None):
         b_data["x"] = baseline_embeddings[:, 0]
         b_data["y"] = baseline_embeddings[:, 1]
         b_data["labels"] = [
-            "G " + np.unique(labels_n)[i] for _ in range(baseline_embeddings.shape[0])]
+            "G " + np.unique(labels_n)[i] for _ in range(baseline_embeddings.shape[0])
+        ]
         b_data["size"] = 0.2
-        baseline_ax = sns.scatterplot("x", "y", alpha=alpha, style="labels", markers={"o"}, legend='brief', size="size",
-                                      color=colors[i], palette=training_palette,
-                                      data=b_data, linewidth=0)
+        baseline_ax = sns.scatterplot(
+            "x",
+            "y",
+            alpha=alpha,
+            style="labels",
+            markers={"o"},
+            legend="brief",
+            size="size",
+            color=colors[i],
+            palette=training_palette,
+            data=b_data,
+            linewidth=0,
+        )
         baseline_ax.set_xlim(xlim)
         baseline_ax.set_ylim(ylim)
     if not baselines:
@@ -226,8 +368,19 @@ def plot_embeddings(mapper, labels, baselines=[], xlim=None, ylim=None):
         data["palette"] = training_palette
         data["markers"] = markers
 
-        ax = sns.scatterplot(x="x", y="y", style="labels", markers=markers, hue="labels", palette=training_palette,
-                             data=data, linewidth=0, alpha=alpha, size=size, legend='brief')
+        ax = sns.scatterplot(
+            x="x",
+            y="y",
+            style="labels",
+            markers=markers,
+            hue="labels",
+            palette=training_palette,
+            data=data,
+            linewidth=0,
+            alpha=alpha,
+            size=size,
+            legend="brief",
+        )
         xlim = ax.get_xlim()
         ylim = ax.get_ylim()
         h, l = ax.get_legend_handles_labels()
@@ -235,7 +388,7 @@ def plot_embeddings(mapper, labels, baselines=[], xlim=None, ylim=None):
     else:
         ax = baseline_ax
         h, l = ax.get_legend_handles_labels()
-        n = [j for j in range(len(h)) if l[j][0] == 'G']
+        n = [j for j in range(len(h)) if l[j][0] == "G"]
         n_h = [h[j] for j in n]
         n_l = [l[j] for j in n]
         for k in range(len(n_h)):
@@ -249,6 +402,18 @@ def plot_embeddings(mapper, labels, baselines=[], xlim=None, ylim=None):
 
 
 def compute_embeddings(model, dataset, hparams, max_count=-1):
+    """
+    Computes embeddings for a given dataset using the specified model.
+
+    Args:
+        model (nn.Module): The model used to generate embeddings.
+        dataset (DataLoader): The dataset to generate embeddings from.
+        hparams (Namespace): Hyperparameters used in the model.
+        max_count (int, optional): The maximum number of samples to process. Defaults to -1 (no limit).
+
+    Returns:
+        tuple: A tuple containing embeddings, labels, and outputs.
+    """
     embeddings = []
     labels = []
     outputs = []
@@ -261,7 +426,11 @@ def compute_embeddings(model, dataset, hparams, max_count=-1):
         outputs.append(x.detach().cpu().numpy())
         if max_count != -1 and i > max_count:
             break
-    return np.array(embeddings).squeeze(), np.array(labels).squeeze(), np.array(outputs).squeeze()
+    return (
+        np.array(embeddings).squeeze(),
+        np.array(labels).squeeze(),
+        np.array(outputs).squeeze(),
+    )
 
 
 if __name__ == "__main__":

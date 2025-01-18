@@ -1,6 +1,0 @@
-Collecting tqdm
-  Using cached tqdm-4.66.5-py3-none-any.whl.metadata (57 kB)
-Requirement already satisfied: colorama in c:\users\axelo\documents\cours pge 3\ai clinic\s1\gan-venv\lib\site-packages (from tqdm) (0.4.6)
-Using cached tqdm-4.66.5-py3-none-any.whl (78 kB)
-Installing collected packages: tqdm
-Successfully installed tqdm-4.66.5

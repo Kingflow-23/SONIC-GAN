@@ -2,14 +2,22 @@
 import os
 import torch
 
-from mario.tokens import TOKEN_GROUPS
+from games.mario.tokens import TOKEN_GROUPS
 
 from .generator import Level_GeneratorConcatSkip2CleanAdd
 from .discriminator import Level_WDiscriminator
 
 
 def weights_init(m):
-    """ Init weights for Conv and Norm Layers. """
+    """
+    Initialize weights for Conv and Norm layers.
+
+    - Convolution layers are initialized with normal distribution (mean=0, std=0.02).
+    - Normalization layers are initialized with normal distribution (mean=1, std=0.02) and bias filled with zeros.
+
+    Args:
+        m (torch.nn.Module): The module (layer) to initialize.
+    """
     classname = m.__class__.__name__
     if classname.find("Conv2d") != -1:
         m.weight.data.normal_(0.0, 0.02)
@@ -19,7 +27,18 @@ def weights_init(m):
 
 
 def init_models(opt):
-    """ Initialize Generator and Discriminator. """
+    """
+    Initialize the Generator and Discriminator models.
+
+    Initializes the models with weights and, if specified, loads the state dictionaries from pre-trained models.
+
+    Args:
+        opt: The options containing model parameters, including file paths for pre-trained networks.
+
+    Returns:
+        D (torch.nn.Module): The discriminator model.
+        G (torch.nn.Module): The generator model.
+    """
     # generator initialization:
     G = Level_GeneratorConcatSkip2CleanAdd(opt).to(opt.device)
     G.apply(weights_init)
@@ -38,6 +57,21 @@ def init_models(opt):
 
 
 def calc_gradient_penalty(netD, real_data, fake_data, LAMBDA, device):
+    """
+    Calculate the gradient penalty for Wasserstein GAN training.
+
+    The penalty is used to enforce the 1-Lipschitz constraint on the discriminator.
+
+    Args:
+        netD (torch.nn.Module): The discriminator model.
+        real_data (torch.Tensor): A batch of real data.
+        fake_data (torch.Tensor): A batch of generated fake data.
+        LAMBDA (float): The gradient penalty coefficient.
+        device (torch.device): The device (CPU or GPU).
+
+    Returns:
+        torch.Tensor: The computed gradient penalty.
+    """
     alpha = torch.rand(1, 1)
     alpha = alpha.expand(real_data.size())
     alpha = alpha.to(device)
@@ -62,12 +96,36 @@ def calc_gradient_penalty(netD, real_data, fake_data, LAMBDA, device):
 
 
 def save_networks(G, D, z_opt, opt):
+    """
+    Save the state dictionaries of the Generator, Discriminator, and noise map.
+
+    Args:
+        G (torch.nn.Module): The generator model.
+        D (torch.nn.Module): The discriminator model.
+        z_opt (torch.Tensor): The optimized noise map.
+        opt: The options containing the output directory path.
+    """
     torch.save(G.state_dict(), "%s/G.pth" % (opt.outf))
     torch.save(D.state_dict(), "%s/D.pth" % (opt.outf))
     torch.save(z_opt, "%s/z_opt.pth" % (opt.outf))
 
 
 def restore_weights(D_curr, G_curr, scale_num, opt):
+    """
+    Restore the weights for the Generator and Discriminator from a previous scale.
+
+    This function helps with progressive training of the models at different scales.
+
+    Args:
+        D_curr (torch.nn.Module): The current discriminator model.
+        G_curr (torch.nn.Module): The current generator model.
+        scale_num (int): The scale number to restore from.
+        opt: The options containing the output directory path.
+
+    Returns:
+        D_curr (torch.nn.Module): The updated discriminator model.
+        G_curr (torch.nn.Module): The updated generator model.
+    """
     G_state_dict = torch.load("%s/%d/G.pth" % (opt.out_, scale_num - 1))
     D_state_dict = torch.load("%s/%d/D.pth" % (opt.out_, scale_num - 1))
 
@@ -124,19 +182,43 @@ def restore_weights(D_curr, G_curr, scale_num, opt):
 
 
 def reset_grads(model, require_grad):
+    """
+    Reset the requires_grad flag for all parameters in the model.
+
+    Args:
+        model (torch.nn.Module): The model whose parameters' requires_grad flag will be updated.
+        require_grad (bool): Whether to enable or disable gradients for the model parameters.
+
+    Returns:
+        model (torch.nn.Module): The model with updated gradient requirements.
+    """
     for p in model.parameters():
         p.requires_grad_(require_grad)
     return model
 
 
 def load_trained_pyramid(opt):
+    """
+    Load the trained models and data for the pyramid structure.
+
+    If no trained models exist, a message is printed indicating that training must be done first.
+
+    Args:
+        opt: The options containing the output directory path.
+
+    Returns:
+        Gs (list): List of trained generator models.
+        Zs (list): List of noise maps used for generating images.
+        reals (list): List of real training images.
+        NoiseAmp (list): List of noise amplitudes.
+    """
     dir = opt.out_
-    if(os.path.exists(dir)):
-        reals = torch.load('%s/reals.pth' % dir)
-        Gs = torch.load('%s/generators.pth' % dir)
-        Zs = torch.load('%s/noise_maps.pth' % dir)
-        NoiseAmp = torch.load('%s/noise_amplitudes.pth' % dir)
+    if os.path.exists(dir):
+        reals = torch.load("%s/reals.pth" % dir)
+        Gs = torch.load("%s/generators.pth" % dir)
+        Zs = torch.load("%s/noise_maps.pth" % dir)
+        NoiseAmp = torch.load("%s/noise_amplitudes.pth" % dir)
 
     else:
-        print('no appropriate trained model exists, please train first')
-    return Gs,Zs,reals,NoiseAmp
+        print("no appropriate trained model exists, please train first")
+    return Gs, Zs, reals, NoiseAmp

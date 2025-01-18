@@ -15,28 +15,38 @@ from sklearn.metrics import ConfusionMatrixDisplay
 from tqdm import tqdm
 
 import wandb
-from mario.level_snippet_dataset import LevelSnippetDataset
+from games.mario.level_snippet_dataset import LevelSnippetDataset
 
 
 def parse_args():
+    """
+    Parse command-line arguments.
+
+    Returns:
+        hparams (argparse.Namespace): A namespace object containing the parsed command-line arguments.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--project", type=str, default="mario")
     parser.add_argument("--tags", nargs="*", type=str, default=["similarity"])
     parser.add_argument("--job-type", type=str, default="eval")
-    parser.add_argument("--level-dir", type=str,
-                        metavar="DIR", default="Input/Images")
+    parser.add_argument("--level-dir", type=str, metavar="DIR", default="Input/Images")
     parser.add_argument("--run-dir", type=str, metavar="DIR")
     parser.add_argument("--slice-width", type=int, default=16)
     parser.add_argument("--weight", type=float, default=1.0)
-    parser.add_argument("--pattern-sizes", nargs="+",
-                        type=int, default=[4, 3, 2])
+    parser.add_argument("--pattern-sizes", nargs="+", type=int, default=[4, 3, 2])
     hparams = parser.parse_args()
     return hparams
 
 
 def pattern_key(level_slice):
     """
-    Computes a hashable key from a level slice.
+    Generate a hashable key for a given level slice.
+
+    Args:
+        level_slice (ndarray): A slice of the level represented as a 2D numpy array.
+
+    Returns:
+        str: A string representation of the pattern key.
     """
     key = ""
     for line in level_slice:
@@ -47,7 +57,14 @@ def pattern_key(level_slice):
 
 def get_pattern_counts(level, pattern_size):
     """
-    Collects counts from all patterns in the level of the given size.
+    Count occurrences of all patterns of a given size in a level.
+
+    Args:
+        level (ndarray): The level represented as a 2D numpy array.
+        pattern_size (int): The size of the patterns to be counted.
+
+    Returns:
+        dict: A dictionary of pattern counts.
     """
     pattern_counts = collections.defaultdict(int)
     for up in range(level.shape[0] - pattern_size + 1):
@@ -61,12 +78,20 @@ def get_pattern_counts(level, pattern_size):
 
 def compute_pattern_counts(dataset, pattern_size):
     """
-    Compute pattern counts in parallel from a given dataset.
+    Compute pattern counts for the entire dataset in parallel.
+
+    Args:
+        dataset (LevelSnippetDataset): The dataset containing levels.
+        pattern_size (int): The size of the patterns to be counted.
+
+    Returns:
+        dict: A dictionary containing the pattern counts for the dataset.
     """
     levels = [level.argmax(dim=0).numpy() for level in dataset.levels]
     with mp.Pool() as pool:
         counts_per_level = pool.map(
-            partial(get_pattern_counts, pattern_size=pattern_size), levels,
+            partial(get_pattern_counts, pattern_size=pattern_size),
+            levels,
         )
     pattern_counts = collections.defaultdict(int)
     for counts in counts_per_level:
@@ -77,12 +102,26 @@ def compute_pattern_counts(dataset, pattern_size):
 
 def compute_prob(pattern_count, num_patterns, epsilon=1e-7):
     """
-    Compute probability of a pattern.
+    Compute the probability of a pattern.
+
+    Args:
+        pattern_count (int): The count of a specific pattern.
+        num_patterns (int): The total number of patterns.
+        epsilon (float): A small constant added to avoid division by zero.
+
+    Returns:
+        float: The probability of the pattern.
     """
     return (pattern_count + epsilon) / ((num_patterns + epsilon) * (1 + epsilon))
 
 
 def main():
+    """
+    Main entry point for evaluating the dataset's KL-divergence and generating confusion matrices.
+
+    This function loads the dataset, computes KL-divergence between original and test levels,
+    and generates confusion matrices. Results are logged to Weights & Biases.
+    """
     logger.remove()
     logger.add(
         sys.stdout,
@@ -97,7 +136,8 @@ def main():
         config=hparams,
     )
     dataset = LevelSnippetDataset(
-        level_dir=hparams.level_dir, slice_width=hparams.slice_width,
+        level_dir=hparams.level_dir,
+        slice_width=hparams.slice_width,
     )
     display_labels = sorted([name for name in dataset.level_names])
     confusion_matrix_mean_dict = {}
@@ -138,23 +178,22 @@ def main():
         for level_name in display_labels:
             row = []
             for current_level_name in display_labels:
-                row.append(
-                    confusion_matrix_mean_dict[level_name][current_level_name])
+                row.append(confusion_matrix_mean_dict[level_name][current_level_name])
             confusion_matrix.append(row)
             table_row = [level_name] + row
             table.add_data(*table_row)
         confusion_matrix = np.array(confusion_matrix)
         sns.set(context="paper", style="white")
         confusion_display = ConfusionMatrixDisplay(
-            confusion_matrix, [name.split(".")[0] for name in display_labels],
+            confusion_matrix,
+            [name.split(".")[0] for name in display_labels],
         )
         confusion_display.plot()
         ax = confusion_display.ax_
         ax.set_ylabel("GAN Level")
         ax.set_xlabel("Original Level")
         plt.tight_layout()
-        figure_path = os.path.join(
-            wandb.run.dir, f"confusion_matrix_{stat}.pdf")
+        figure_path = os.path.join(wandb.run.dir, f"confusion_matrix_{stat}.pdf")
         plt.savefig(figure_path, dpi=300)
         wandb.save(figure_path)
         wandb.log(
@@ -166,8 +205,18 @@ def main():
 
 
 def compute_kl_divergence(dataset, test_level_dir, hparams):
-    logger.info(
-        "Computing KL-Divergence for generated levels in {}", test_level_dir)
+    """
+    Compute the Kullback-Leibler (KL) divergence between two datasets (original and test levels).
+
+    Args:
+        dataset (LevelSnippetDataset): The original level dataset.
+        test_level_dir (str): The directory containing the test levels.
+        hparams (argparse.Namespace): The hyperparameters object.
+
+    Returns:
+        tuple: A tuple containing the mean and variance of the KL-divergence.
+    """
+    logger.info("Computing KL-Divergence for generated levels in {}", test_level_dir)
     test_dataset = LevelSnippetDataset(
         level_dir=test_level_dir,
         slice_width=hparams.slice_width,
@@ -178,8 +227,7 @@ def compute_kl_divergence(dataset, test_level_dir, hparams):
         logger.info("Computing original pattern counts...")
         pattern_counts = compute_pattern_counts(dataset, pattern_size)
         logger.info("Computing test pattern counts...")
-        test_pattern_counts = compute_pattern_counts(
-            test_dataset, pattern_size)
+        test_pattern_counts = compute_pattern_counts(test_dataset, pattern_size)
 
         num_patterns = sum(pattern_counts.values())
         num_test_patterns = sum(test_pattern_counts.values())
@@ -190,8 +238,7 @@ def compute_kl_divergence(dataset, test_level_dir, hparams):
         kl_divergence = 0
         for pattern, count in tqdm(pattern_counts.items()):
             prob_p = compute_prob(count, num_patterns)
-            prob_q = compute_prob(
-                test_pattern_counts[pattern], num_test_patterns)
+            prob_q = compute_prob(test_pattern_counts[pattern], num_test_patterns)
             kl_divergence += hparams.weight * prob_p * math.log(prob_p / prob_q) + (
                 1 - hparams.weight
             ) * prob_q * math.log(prob_q / prob_p)

@@ -5,47 +5,81 @@ import torch
 import wandb
 from tqdm import tqdm
 
-from mario.level_utils import one_hot_to_ascii_level, token_to_group
-from mario.tokens import TOKEN_GROUPS as MARIO_TOKEN_GROUPS
-from mariokart.tokens import TOKEN_GROUPS as MARIOKART_TOKEN_GROUPS
-from sonic.tokens import TOKENS_GROUPS as SONIC_TOKEN_GROUPS
-from mario.special_mario_downsampling import special_mario_downsampling
-from mariokart.special_mariokart_downsampling import special_mariokart_downsampling
-from sonic.special_sonic_downsampling import special_sonic_downsampling
+from games.mario.level_utils import one_hot_to_ascii_level, token_to_group
+from games.mario.tokens import TOKEN_GROUPS as MARIO_TOKEN_GROUPS
+from games.mariokart.tokens import TOKEN_GROUPS as MARIOKART_TOKEN_GROUPS
+from games.sonic.tokens import TOKENS_GROUPS as SONIC_TOKEN_GROUPS
+from games.mario.special_mario_downsampling import special_mario_downsampling
+from games.mariokart.special_mariokart_downsampling import (
+    special_mariokart_downsampling,
+)
+from games.sonic.special_sonic_downsampling import special_sonic_downsampling
 from models import init_models, reset_grads, restore_weights
 from models.generator import Level_GeneratorConcatSkip2CleanAdd
 from train_single_scale import train_single_scale
 
 
 def train(real, opt):
-    """ Wrapper function for training. Calculates necessary scales then calls train_single_scale on each. """
+    """
+    Wrapper function to train a generative model on multiple scales. It calculates the necessary downsampled
+    versions of the input level and then calls `train_single_scale` to train each scale sequentially.
+    The function saves generated models, noise maps, and other training information periodically.
+
+    Args:
+        real (torch.Tensor): The original input level.
+        opt (Namespace): Configuration object containing training parameters, including the game type, scales,
+                         token insertions, and more.
+
+    Returns:
+        tuple:
+            - generators (list): List of trained generators for each scale.
+            - noise_maps (list): List of noise maps for each scale.
+            - reals (list): List of real (downsampled) levels for each scale.
+            - noise_amplitudes (list): Amplitudes of noise for each scale.
+    """
     generators = []
     noise_maps = []
     noise_amplitudes = []
 
-    if opt.game == 'mario':
+    if opt.game == "mario":
         token_group = MARIO_TOKEN_GROUPS
-    elif opt.game == 'mariokart':  # if opt.game == 'mariokart':
+    elif opt.game == "mariokart":
         token_group = MARIOKART_TOKEN_GROUPS
-    elif opt.game == 'sonic':
+    elif opt.game == "sonic":
         token_group = SONIC_TOKEN_GROUPS
 
     scales = [[x, x] for x in opt.scales]
     opt.num_scales = len(scales)
 
-    if opt.game == 'mario':
-        scaled_list = special_mario_downsampling(opt.num_scales, scales, real, opt.token_list)
-    elif opt.game == 'mariokart':  # if opt.game == 'mariokart':
-        scaled_list = special_mariokart_downsampling(opt.num_scales, scales, real, opt.token_list)
-    elif opt.game == 'sonic':
-        scaled_list = special_sonic_downsampling(opt.num_scales, scales, real, opt.token_list)
+    if opt.game == "mario":
+        scaled_list = special_mario_downsampling(
+            opt.num_scales, scales, real, opt.token_list
+        )
+    elif opt.game == "mariokart":  # if opt.game == 'mariokart':
+        scaled_list = special_mariokart_downsampling(
+            opt.num_scales, scales, real, opt.token_list
+        )
+    elif opt.game == "sonic":
+        scaled_list = special_sonic_downsampling(
+            opt.num_scales, scales, real, opt.token_list
+        )
 
     reals = [*scaled_list, real]
 
     # If (experimental) token grouping feature is used:
     if opt.token_insert >= 0:
-        reals = [(token_to_group(r, opt.token_list, token_group) if i < opt.token_insert else r) for i, r in enumerate(reals)]
-        reals.insert(opt.token_insert, token_to_group(reals[opt.token_insert], opt.token_list, token_group))
+        reals = [
+            (
+                token_to_group(r, opt.token_list, token_group)
+                if i < opt.token_insert
+                else r
+            )
+            for i, r in enumerate(reals)
+        ]
+        reals.insert(
+            opt.token_insert,
+            token_to_group(reals[opt.token_insert], opt.token_list, token_group),
+        )
     input_from_prev_scale = torch.zeros_like(reals[0])
 
     stop_scale = len(reals)
@@ -75,8 +109,16 @@ def train(real, opt):
             D, G = restore_weights(D, G, current_scale, opt)
 
         # Actually train the current scale
-        z_opt, input_from_prev_scale, G = train_single_scale(D,  G, reals, generators, noise_maps,
-                                                             input_from_prev_scale, noise_amplitudes, opt)
+        z_opt, input_from_prev_scale, G = train_single_scale(
+            D,
+            G,
+            reals,
+            generators,
+            noise_maps,
+            input_from_prev_scale,
+            noise_amplitudes,
+            opt,
+        )
 
         # Reset grads and save current scale
         G = reset_grads(G, False)
@@ -96,7 +138,9 @@ def train(real, opt):
         torch.save(opt.token_list, "%s/token_list.pth" % (opt.out_))
         wandb.save("%s/*.pth" % opt.out_)
 
-        torch.save(G.state_dict(), "%s/state_dicts/G_%d.pth" % (opt.out_, current_scale))
+        torch.save(
+            G.state_dict(), "%s/state_dicts/G_%d.pth" % (opt.out_, current_scale)
+        )
         wandb.save("%s/state_dicts/*.pth" % opt.out_)
 
         del D, G
