@@ -1,7 +1,8 @@
 wandb/
 venv/
 .idea/
-output/
+/output/*
+!/output/
 .vscode/
 .history/
 __pycache__/
