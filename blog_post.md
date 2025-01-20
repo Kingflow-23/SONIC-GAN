@@ -149,19 +149,28 @@ The levels we’ve manually made are of course more complex than Mario levels, b
 
 ### Model Adaptation
 
-To apply TOAD-GAN effectively to Sonic, the model's architecture and logic were tailored to match Sonic's distinct level design features. Thus, it’s important to understand how the neural network behind the TOAD-GAN is constructed, how does the TOAD-GAN handle input data, how the graphical rendering of the level is designed and the overall process of the TOAD-GAN to generate those levels. 
+To apply TOAD-GAN effectively to Sonic, the model's architecture and logic were tailored to match Sonic's distinct level design features. Thus, it’s important to understand how the neural network behind the TOAD-GAN is constructed, how does the TOAD-GAN handle input data, how the graphical rendering of the level is designed and the overall process of the TOAD-GAN to generate those levels.
+
 As already mentioned earlier, the GAN is a combination of two models: the Generator and the Discriminator. The generator as its noun refers to, will generate the output of based on input data. The discriminator is here to penalize the generator when he is getting out of rails. 
+
 Both are constructed using convolutional blocks with a predefined structure. They simply add as many modules as mentioned in the command line when we are calling the model (in this case a module is a convolutional block). Then, to directly impact the model architecture, we can modify that base configuration of the convolutional block. 
+
 For the TOAD-GAN model, the base convolutional block is the association of a Conv2D layer, with a BatchNorm2D and a LeakyReLu layer at the end. And we can add more layers, from different types based on our initial problem. That architecture allows us to easily modify the model and adjust it to fit our needs.
 
 The TOAD-GAN model takes as input ASCII encoded level of the game we want to generate levels from. That level will just be converted into tensor then group those tensors based on the TOKEN_GROUPS dictionary defined in the tokens.py file. Now we pass the result into our models and the results which are group token tensor will be converted back into tensor and finally into ascii. Finally, the graphical engine takes the ascii level and by using the sprite data we have, it will generate the image corresponding to the level.
 
 Now, we know how TOAD-GAN works, and how to adapt TOAD-GAN to our game, SONIC. For that, we focused on the graphic engine, and the model hyper parameters.
+
 The graphic engine will generate the image of the level and apply the logical physics of the game, and the model hyper parameters will help the model to fit our needs by directly impacting the way it’s learning. 
-•	Topology Awareness – Logic Physics implementation:
+
+**•	Topology Awareness – Logic Physics implementation:**
+
 The level_image_gen was adjusted to emphasize logic, verticality, and interconnected paths. Simplified sprites and logical rules ensured that gameplay elements aligned with Sonic's physics and aesthetic requirements.
-•	Token System Integration:
+
+**•	Token System Integration:**
+
 The newly curated and modified sprites were integrated into the model's pipeline, replacing placeholder assets with elements true to Sonic's universe. This allowed the model to learn the specific style and design principles of the original levels.
+
 To do that we used a hierarchy like the one we could have in the Mario game:
 
 
@@ -169,11 +178,15 @@ To do that we used a hierarchy like the one we could have in the Mario game:
 
 Fig 9: Sonic Token Hierarchy
 
-All these tokens' groups are defined in token.py. It’ll seem obvious but to explain key groups, they include GROUND_TOKENS for standard ground blocks, SPECIAL_GROUND_TOKENS for unique terrain features, SKY_TOKENS for empty spaces, ENEMY_TOKENS for enemy types, SPECIAL_TOKENS for gameplay-critical items like rings, Sonic starting and ending position and item box, and EXTRA_SPECIAL_TOKENS for decorative elements like tree and flowers.
-•	Hyperparameter Adjustments:
+All these tokens' groups are defined in token.py. It’ll seem obvious but to explain key groups, they include **GROUND_TOKENS** for standard ground blocks, **SPECIAL_GROUND_TOKENS** for unique terrain features, **SKY_TOKENS** for empty spaces, **ENEMY_TOKENS** for enemy types, **SPECIAL_TOKENS** for gameplay-critical items like rings, Sonic starting and ending position and item box, and **EXTRA_SPECIAL_TOKENS** for decorative elements like tree and flowers.
+
+**•	Hyperparameter Adjustments:**
+
 We iteratively tuned TOAD-GAN's hyperparameters to improve output quality. Key modifications included:
-•	--nfc: Increased convolutional filters from 64 to 128 to handle complexity.
-•	--alpha: Raised reconstruction loss weight to 200 for better realism.
+
+-	**--nfc:** Increased convolutional filters from 64 to 128 to handle complexity.
+
+-	**--alpha:** Raised reconstruction loss weight to 200 for better realism.
 
 After implementing those adjustments, we’ve been able to create using the GAN levels looking like this:
 
@@ -191,6 +204,7 @@ And we previously had levels looking like:
 ### Level Generation
 
 Once the dataset and model were prepared, we began the level generation phase. This involved running iterative experiments to produce a diverse set of level designs while monitoring and fine-tuning the model's performance.
+
 - **Generation Workflow:**
   -	Levels were generated with varying parameters, analyzed for structural coherence, and refined by adjusting hyperparameters like patch size and learning rate.
 
