@@ -190,8 +190,7 @@ We iteratively tuned TOAD-GAN's hyperparameters to improve output quality. Key m
 
 After implementing those adjustments, we’ve been able to create using the GAN levels looking like this:
 
-
-![image](https://github.com/user-attachments/assets/ed6b65f5-65be-4559-8fba-d807212bd805)
+![image](https://github.com/user-attachments/assets/ad4bac9d-76f7-456d-a606-0f8ed3740bc0)
 
 And we previously had levels looking like:
 
