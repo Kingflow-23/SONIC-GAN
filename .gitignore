@@ -1,8 +1,8 @@
 wandb/
 venv/
 .idea/
-/output/*
-!/output/
+output/*
+!.gitkeep
 .vscode/
 .history/
 __pycache__/
