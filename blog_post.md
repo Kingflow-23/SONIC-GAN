@@ -216,7 +216,7 @@ After each generation cycle, we analyzed the outputs for:
 **Model parameters**
 ----------------
 
-During the iterative part, we tried to manipulate the hyperparameters of the model as the TOAD-GAN is not specific to one game, a bad output should be related to the hyperparameters (at least that’s the conclusion we came up with) and it worked well as it improved our result over iterations. An explanation of all hyperparameters ca be found in our project [README](https://github.com/vsx23733/SONIC-GAN/blob/main/README.md)
+During the iterative part, we tried to manipulate the hyperparameters of the model as the TOAD-GAN is not specific to one game, a bad output should be related to the hyperparameters (at least that’s the conclusion we came up with) and it worked well as it improved our result over iterations. An explanation of all hyperparameters can be found in our project [README](https://github.com/vsx23733/SONIC-GAN/blob/main/README.md)
 
 
 ### Evaluation by Reinforcement Learning
