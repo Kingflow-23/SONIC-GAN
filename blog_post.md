@@ -88,7 +88,7 @@ To lay the groundwork for the project, we undertook an exhaustive process of res
 
 -	**Sprite Collection:**
 
-Sprites were sourced from publicly available repositories and fan communities dedicated to Sonic games. These resources included tilesets, character animations, and environmental features. To adhere to project deadlines and simplify the physical logic of levels, we opted to exclude complex structures like semi-curved ground, loops, and dynamic motions for rings and enemies. Instead, static sprites were used for these elements, as their absence minimally impacts gameplay or difficulty during testing.
+Sprites were sourced from publicly available repositories and fan communities dedicated to Sonic games like [spriter-resource](https://www.spriters-resource.com/custom_edited/sonicthehedgehogcustoms) and [vgmaps](https://www.vgmaps.com). These resources included tilesets, character animations, and environmental features. To adhere to project deadlines and simplify the physical logic of levels, we opted to exclude complex structures like semi-curved ground, loops, and dynamic motions for rings and enemies. Instead, static sprites were used for these elements, as their absence minimally impacts gameplay or difficulty during testing.
 
 Below are examples of sprites used in this project:
 
@@ -128,7 +128,7 @@ This process was critical to ensuring the compatibility of the sprites with the 
 The dataset forms the backbone of any machine learning project.
 - **Level Data Acquisition:**
 
-For this project we used an AI generated ASCII Level of the sonic level. An explanation of each token is provided below in our project [tokens.py](https://github.com/vsx23733/SONIC-GAN/blob/main/sonic/tokens.py):
+For this project we used an AI generated ASCII Level of the sonic level. An explanation of each token is provided in our project [tokens.py](https://github.com/vsx23733/SONIC-GAN/blob/main/sonic/tokens.py):
 
 ![image](https://github.com/user-attachments/assets/59f6c7e5-f365-43f5-94de-824a764ce114)
 
