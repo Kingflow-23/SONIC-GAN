@@ -224,6 +224,8 @@ During the iterative part, we tried to manipulate the hyperparameters of the mod
 To further refine the generated levels, we implemented **Reinforcement Learning** (RL) techniques to evaluate the levels based on player feedback. The idea behind this is to let the AI "play" through the generated levels and reward it for creating levels that provide a balanced challenge. If a generated level is too easy or too hard, the model can adjust its parameters to improve the level’s quality.
 
 
+We get more into details [here](https://kingflow-23.github.io/SONIC-GAN/blog_post_part_2).
+
 
 ## Conclusion
 
