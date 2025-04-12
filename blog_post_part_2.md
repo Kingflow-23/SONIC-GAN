@@ -3,10 +3,7 @@
 ## Table of Contents
 
 - [a. Introduction](#a-introduction)  
-  - [i. Context](#i-context)  
-  - [ii. State of the art](#ii-state-of-the-art)  
-  - [iii. Contribution](#iii-contribution)  
-  - [iv. Resources](#iv-resources)  
+  - [i. Context](#i-context)
 - [b. Work Done](#b-work-done)  
   - [i. Research and Preparation](#i-research-and-preparation)  
   - [ii. Dataset Collection and Preparation](#ii-dataset-collection-and-preparation)  
@@ -19,7 +16,6 @@
   - [Hard Skills](#hard-skills)  
   - [Soft Skills](#soft-skills)  
 - [f. Appendix](#f-appendix)  
-- [g. References](#g-references)
 
 ---
 
@@ -72,24 +68,6 @@ This continued research and development will not only refine our GAN-based appro
 
 ---
 
-### ii. State of the art
-
-*(Add relevant content regarding current approaches and literature here.)*
-
----
-
-### iii. Contribution
-
-*(Detail your specific contributions to the field, improvements over previous work, and any novel techniques you introduced.)*
-
----
-
-### iv. Resources
-
-*(List any external resources, libraries, datasets, or tools used in the project.)*
-
----
-
 ## b. Work Done
 
 ### i. Research and Preparation
@@ -101,8 +79,17 @@ To advance the project, we extended our research by incorporating commercial Son
   We expanded our dataset with broader level map sheets, incorporating multiple environments, platforms, hazards, and background assets representing different stages of Sonic games. This broader scope enhances the model's ability to generate levels with greater structural variety and gameplay depth.
 
   *Examples of newly sourced assets are shown in the following figures:*
-  - **Fig 1:** Commercial Sonic level spritesheet  
-  - **Fig 2:** Extended Mapsheet  
+
+![image](https://github.com/user-attachments/assets/ebe67562-d3cc-485a-be36-5077e832e1a0)
+
+  - **Fig 1:** Commercial Sonic level spritesheet
+
+![image](https://github.com/user-attachments/assets/19aa0011-8f2d-41d8-98f4-22e4f1eec029)
+
+  - **Fig 2:** Extended Mapsheet
+
+  ![image](https://github.com/user-attachments/assets/1df799d6-98f2-45f6-b1e5-a9ae521b4718)![image](https://github.com/user-attachments/assets/39406130-d3e3-4a3b-8349-d09813c4bbd9)![image](https://github.com/user-attachments/assets/0185aa8f-1acd-4ff8-9f3a-0bc817a2e63f)
+
   - **Fig 3:** Previously retained sprites such as Sonic, goalposts, and enemies.
 
 - **Sprite Adaptation:**  
@@ -124,19 +111,28 @@ GenSonic (version 0) is the tool we developed to automatically convert the image
 GenSonic operates in four phases:
 
 1. **The 256-Split**  
-   The first step involves splitting the input image into 256 blocks, as the level is an assembly of 256×256 image blocks arranged sequentially to form the complete level.  
+   The first step involves splitting the input image into 256 blocks, as the level is an assembly of 256×256 image blocks arranged sequentially to form the complete level.
+
+   ![image](https://github.com/user-attachments/assets/2918dfa2-cdb2-441d-b2a8-acaf8777d7c3)
+
    **Fig 5:** Commercial level to be divided into 64×64 tiles.
 
-2. **The 64-Split**  
-   GenSonic processes the level image along with the sprite pool, which is the set of 64-pixel images that compose each 256-block of the original level.  
+3. **The 64-Split**  
+   GenSonic processes the level image along with the sprite pool, which is the set of 64-pixel images that compose each 256-block of the original level.
+
+   ![image](https://github.com/user-attachments/assets/4226d266-c40a-4163-9a8c-1afcf9bebd26)
+
    **Fig 6:** ASCII Matrix of a 256-block
 
-3. **Sprite Matching and ASCII Conversion**  
+5. **Sprite Matching and ASCII Conversion**  
    Once the level is split, we use an engine that employs two dictionaries. The first maps each image from the sprite pool to its name (with the sprite name as the key and the image array as the value). The second maps each sprite name to an ASCII character. Since there are more sprites than available ASCII characters, we build the mapper of sprite names to ASCII characters based only on the sprites present in the level.  
    For each 64-sprite within each block, we compare it to every image in the sprite pool and replace it with the closest match. Using the resulting 64-sprite’s name, we retrieve its associated ASCII character. This process produces an ASCII transcription matrix for each reconstructed 256-block.
 
-4. **Final Reconstruction**  
-   Finally, we combine all the ASCII character matrices from each block to recreate the full ASCII matrix of the original level.  
+6. **Final Reconstruction**  
+   Finally, we combine all the ASCII character matrices from each block to recreate the full ASCII matrix of the original level.
+
+   ![image](https://github.com/user-attachments/assets/d3e9e51c-c9c7-48c0-a34f-e16ca48863e2)
+ 
    **Fig 7:** ASCII Matrix of the full level
 
 This is the first version of GenSonic. Although there is significant room for improvement and optimization, it achieved the intended task and saved us enough time to begin implementing the AI in Unity.
@@ -149,7 +145,13 @@ For future improvements in version v0.1, we plan to generalize GenSonic for othe
 - **Automated Level Encoding:**  
   Once the main color is extracted, the system automatically selects the appropriate sprites based on this color reference. This automated method eliminates the need for manual sprite selection, reduces time spent on data preparation, and ensures consistency and accuracy in sprite matching, allowing for smoother procedural generation. This approach enhances the model’s ability to create varied levels—from backgrounds to obstacles—that are more faithful to the source material.
 
-  **Fig 4:** Example of color matching for our commercial level. Closest sprites found refer to the Level 1 sprite set seen in Fig 2.
+![image](https://github.com/user-attachments/assets/dda80ded-a77d-43db-9ca1-76aa6ab35b54)
+
+**---------->**
+
+![image](https://github.com/user-attachments/assets/2e542661-ecaf-4d4b-a552-7e4e8c017e99)
+
+  **Fig 8:** Example of color matching for our commercial level. Closest sprites found refer to the Level 1 sprite set seen in Fig 2.
 
 Although we did not have time to fully adapt GenSonic to the color detection engine, the code is already in place and can be completed in the next upgrade. By automating the encoding and sprite matching process, this semester’s dataset preparation became significantly more efficient. This new approach allows us to generate levels from any commercial Sonic level with ease, greatly improving the scalability of our procedural generation system.
 
@@ -160,7 +162,13 @@ Although we did not have time to fully adapt GenSonic to the color detection eng
 This semester, we made adjustments to the TOAD-GAN model to improve its ability to handle the new dataset, which now consists of commercial Sonic levels. To simplify the task, we treated the commercial Sonic level as a standalone game. With the knowledge acquired last semester on how the GAN functions, adapting it to a commercial level was straightforward. The main challenge was building the dataset—the ASCII level that will be provided to the GAN.  
 These changes aimed to enhance the model's adaptability to different level structures, ensure better integration with the automated dataset preparation pipeline, and increase the complexity of the generated levels. Instead of modifying the previously working model, we developed a completely new adaptation of the GAN to handle both “casual” Sonic and commercial levels.
 
-**Fig 4:** Example of an ASCII level generated by the GAN
+![image](https://github.com/user-attachments/assets/aa641828-d66c-49cd-acf6-ea05aac9eecd)
+
+![image](https://github.com/user-attachments/assets/8e8622c2-8c31-453a-b176-2a025604ef52)
+
+![image](https://github.com/user-attachments/assets/040066c8-3e00-470f-b589-26879e2c03c8)
+
+**Fig 9:** Examples of ASCII levels generated by the GAN
 
 ---
 
@@ -172,18 +180,27 @@ The project also aimed to design an AI capable of playing and finishing a GAN-cr
 
 We built an environment that allows for easy testing of GAN-generated levels. Since the GAN output is a text file, we created a game object (the LevelLoader) that instantiates the level based on the input text file containing the level data. The LevelLoader has a script component where the prefab for each level block is assigned. The script scans the text file and, for each ASCII character, instantiates the corresponding prefab at the appropriate position.
 
-**Fig 5:** Level Loader Structure
+![image](https://github.com/user-attachments/assets/cc9ae0d9-d03a-4cfd-a2b6-98538633d5a2)
+
+**Fig 10:** Level Loader Structure
 
 This structure enables us to automatically instantiate any level, provided we have the prefab and a dictionary mapping the prefab to the corresponding ASCII character. The implementation also includes the design of rules and physics for the prefabs, as well as game rules tailored to fit all the levels we want to test.
 
-**Fig 6:** Graphical Rendering of the Commercial Level  
-**Fig 7:** Original Commercial Level
+![image](https://github.com/user-attachments/assets/a4ac6f91-c22b-4e53-8d71-bb364fb4f43a)
+
+**Fig 11:** Graphical Rendering of the Commercial Level  
+
+![image](https://github.com/user-attachments/assets/8af7e2d5-c269-4607-9549-39396d114bd6)
+
+**Fig 12:** Original Commercial Level
 
 #### b. Sonic Game Implementation
 
 After dynamically instantiating levels in Unity, we recreated the Sonic game within Unity so that map changes would not affect game performance. This step was challenging, given our limited experience with Unity and C#. The final implementation resembles Sonic but is missing some mechanics, such as the rolling attack and rolling acceleration. However, it provided a functional platform for training an AI.
 
-**Fig 8:** Simple Implementation of Sonic Game in Unity
+![image](https://github.com/user-attachments/assets/0f5c8e5b-6049-4658-8591-1aea6ca1fa20)
+
+**Fig 13:** Simple Implementation of Sonic Game in Unity
 
 In this basic game, a score counter tracks the player’s progress based on distance traveled, rings collected, and enemies defeated. Additionally, the player can perform multiple jumps, and enemy bullets have the capability to track the player.
 
@@ -194,7 +211,11 @@ Reinforcement Learning enables an agent to act in an environment by performing a
 
 We used Unity ML Agents to configure our AI agent. The environment is the currently running level, and the objective for the agent is to finish the level. Rewards are provided for moving forward, collecting rings, and defeating enemies, while penalties are incurred for moving backward, taking damage, or losing rings.
 
-**Fig 8:** Structure of the AI Agent
+![image](https://github.com/user-attachments/assets/ab8b6982-16db-4b96-bdad-eafeb508c3f2)
+
+**Fig 14:** Structure of the AI Agent
+
+The configuration of the last version of the AI can be found right [here](https://github.com/vsx23733/SONIC-CRAFT-UNITY/blob/main/results/SonicAgentTraining_7/configuration.yaml)
 
 The AI training is executed via a terminal where the agent continuously observes the environment, performs actions, receives feedback, and updates its policy until the maximum number of epochs is reached.
 
@@ -212,30 +233,36 @@ This project has led to the creation of several promising tools for game develop
 
 - **GenSonic v0.0**  
   GenSonic is the ASCII auto-encoder that produces an ASCII text file corresponding to the input level. While its performance is not yet optimal, future improvements will make this tool very useful for game developers. When combined with the other tools, it will accelerate the overall process of level creation and testing.  
-  *The tool can be found in its GitHub repository: [GenSonic](#)*
+  *The tool can be found in its GitHub repository: [GenSonic](https://github.com/vsx23733/GenSonic)*
 
 - **SONIC-GAN**  
   Working with GANs for six months deepened our understanding of their functionality, enabling us to adapt the model quickly and efficiently to various 2D platformer games. The GAN was successfully adapted to a Sonic-like game, and with a well-structured ASCII text file as input, it can generate up to 50 ASCII text files of level designs. These outputs can be used for testing or to dynamically generate levels during gameplay.  
-  *The tool can be found in its GitHub repository: [SONIC-GAN](#)*
+  *The tool can be found in its GitHub repository: [SONIC-GAN](https://github.com/vsx23733/SONIC-GAN)*
 
 - **SONIC-UNITY**  
   SONIC-UNITY is a dynamic environment in Unity originally created for a Sonic game. It can also serve as a base for other 2D games and is designed for automatic testing using AI by recreating the game environment. The system uses a text file containing ASCII characters and accompanying dictionaries to instantiate the level. The only requirements are specifying the level text file and assigning the corresponding prefabs.  
-  *The Unity environment can be found in its GitHub repository: [SONIC-UNITY](#)*
+  *The Unity environment can be found in its GitHub repository: [SONIC-UNITY](https://github.com/vsx23733/SONIC-CRAFT-UNITY)*
 
 - **SONIC-AI**  
   SONIC-AI is designed to assess the levels generated by SONIC-GAN, thereby speeding up the level testing process. It uses reinforcement learning within the environment instantiated by SONIC-UNITY. Some AI versions have learned that advancing forward is the primary mechanic, increasing their score by moving through the level, though this is a basic strategy given that additional mechanics (such as jumping, attacking, and item collection) are also present.  
   The evolution of the AI's hyperparameters helps us determine which learning parameters to adjust or whether the environment itself needs modification.
 
-  **Fig 9:** Evolution of the Epsilon Parameter  
+![image](https://github.com/user-attachments/assets/cb16e8a8-5c95-4400-a595-114ba87d2e04)
+
+  **Fig 15:** Evolution of the Epsilon Parameter  
   The epsilon (ε) parameter controls the epsilon-greedy strategy, balancing exploration and exploitation. A very low epsilon indicates that the AI does not explore new strategies. Increasing exploration could help the AI discover more effective ways to complete the level.
 
-  **Fig 10:** Evolution of the Entropy Parameter  
+![image](https://github.com/user-attachments/assets/b535642d-762e-4196-9fd1-edd28226ff52)
+
+  **Fig 16:** Evolution of the Entropy Parameter  
   Similarly, the entropy parameter reveals the degree of unpredictability in the agent's actions, with low entropy indicating limited exploration.
 
-  **Fig 11:** Evolution of the EVE Parameter  
+![image](https://github.com/user-attachments/assets/6891f414-3c20-457a-a2a4-ad5ea9235fc2)
+
+  **Fig 17:** Evolution of the EVE Parameter  
   The Extrinsic Value Estimate (EVE) parameter reflects the agent’s prediction of future external rewards, i.e., those derived directly from the environment. A constant EVE value suggests that the AI might be stuck in a part of the environment where all actions yield similar or no rewards. This issue was observed when the AI became trapped in front of a ground block because it was unable to jump.
 
-  *All trained AI versions (in ONNX format) can be found in the GitHub repository for the Unity portion of the project: [SONIC-UNITY](#)*
+  *All trained AI versions (in ONNX format) can be found in the GitHub repository for the Unity portion of the project: [SONIC-UNITY](https://github.com/vsx23733/SONIC-CRAFT-UNITY/tree/main/results)*
 
 ---
 
